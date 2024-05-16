@@ -45,6 +45,9 @@ func (c *Coordinator) schedule() {
 	}
 }
 
+func (c *Coordinator) scanTaskState() {
+	
+}
 
 func (c *Coordinator) RegWorker(args *RegisterArgs, reply *RegisterReply) error {
 	c.muLock.Lock()
@@ -99,7 +102,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	} else {
 		c.taskChan = make(chan Task, nReduce)
 	}
-
+	go c.schedule()
 	c.server()
 	return &c
 }
