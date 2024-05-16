@@ -1,33 +1,61 @@
 package mr
 
-import "log"
-import "net"
-import "os"
-import "net/rpc"
-import "net/http"
+import (
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"os"
+	"sync"
+	"time"
+)
 
+type TaskPhase int
+type TaskState int
+
+const (
+	TaskPhase_Map    TaskPhase = 0
+	TaskPhase_Reduce TaskPhase = 1
+)
+
+type Task struct {
+	FileName string
+	Id       int
+}
 
 type Coordinator struct {
 	// Your definitions here.
-
+	files      []string
+	nReduce    int
+	taskPhase  TaskPhase
+	taskStates []TaskState
+	taskChan   chan Task
+	workerSeq  int
+	done       bool
+	muLock     sync.Mutex
 }
 
-// Your code here -- RPC handlers for the worker to call.
+func (c *Coordinator) schedule() {
+	{
+		for !c.done {
+			c.scanTaskState()
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
 
-//
-// an example RPC handler.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
+
+func (c *Coordinator) RegWorker(args *RegisterArgs, reply *RegisterReply) error {
+	c.muLock.Lock()
+	defer c.muLock.Unlock()
+	fmt.Println("Register worker")
+	c.workerSeq++
+	reply.WorkerId = c.workerSeq
 	return nil
 }
 
-
-//
 // start a thread that listens for RPCs from worker.go
-//
 func (c *Coordinator) server() {
 	rpc.Register(c)
 	rpc.HandleHTTP()
@@ -41,29 +69,36 @@ func (c *Coordinator) server() {
 	go http.Serve(l, nil)
 }
 
-//
 // main/mrcoordinator.go calls Done() periodically to find out
 // if the entire job has finished.
-//
 func (c *Coordinator) Done() bool {
 	ret := false
 
 	// Your code here.
 
-
 	return ret
 }
 
-//
 // create a Coordinator.
 // main/mrcoordinator.go calls this function.
 // nReduce is the number of reduce tasks to use.
-//
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
-	c := Coordinator{}
+	c := Coordinator{
+		files:      files,
+		nReduce:    nReduce,
+		taskPhase:  TaskPhase_Map,
+		taskStates: make([]TaskState, len(files)),
+		workerSeq:  0,
+		done:       false,
+	}
 
-	// Your code here.
-
+	if len(files) == 0 {
+		log.Fatal("No input files")
+	} else if len(files) < nReduce {
+		c.taskChan = make(chan Task, len(files))
+	} else {
+		c.taskChan = make(chan Task, nReduce)
+	}
 
 	c.server()
 	return &c
