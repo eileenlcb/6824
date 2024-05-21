@@ -12,16 +12,30 @@ import (
 )
 
 type TaskPhase int
-type TaskState int
+type TaskStatus int
 
 const (
 	TaskPhase_Map    TaskPhase = 0
 	TaskPhase_Reduce TaskPhase = 1
 )
 
+const (
+	TaskStatus_New        TaskStatus = 0 //还没有创建
+	TaskStatus_Ready      TaskStatus = 1 //进入队列
+	TaskStatus_Running    TaskStatus = 2 //已经分配，正在运行
+	TaskStatus_Terminated TaskStatus = 3 //运行结束
+	TaskStatus_Error      TaskStatus = 4 //运行出错
+)
+
 type Task struct {
 	FileName string
 	Id       int
+}
+
+type TaskState struct {
+	Status    TaskStatus
+	WorkerId  int
+	StartTime time.Time
 }
 
 type Coordinator struct {
@@ -46,7 +60,20 @@ func (c *Coordinator) schedule() {
 }
 
 func (c *Coordinator) scanTaskState() {
-	
+	Dprintf("scanTaskState...")
+	c.muLock.Lock()
+	defer c.muLock.Unlock()
+
+	if c.done {
+		return
+	}
+
+	allDone := true
+
+	for k, v := range c.taskStates {
+
+	}
+
 }
 
 func (c *Coordinator) RegWorker(args *RegisterArgs, reply *RegisterReply) error {
