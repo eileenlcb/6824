@@ -29,7 +29,11 @@ const (
 
 type Task struct {
 	FileName string
-	Id       int
+	Phase TaskPhase
+	Seq int
+	NMap int
+	NReduce int
+	Alive bool
 }
 
 type TaskState struct {
@@ -59,6 +63,28 @@ func (c *Coordinator) schedule() {
 	}
 }
 
+
+func (c *Coordinator) NewOneTask(seq int) Task{
+	task := Task{
+		FileName: "",
+		Phase: c.taskPhase,
+		NMap: len(c.files),
+		NReduce: c.nReduce,
+		Seq: seq,
+		Alive: true,
+	}
+
+	DPrintf("m:%+v, taskseq:%d, lenfiles:%d, lents:%d", c, seq, len(c.files), len(c.taskStates))
+
+	if task.Phase == TaskPhase_Map {
+		task.FileName = c.files[seq]
+	}
+
+	return task
+
+}
+
+
 func (c *Coordinator) scanTaskState() {
 	Dprintf("scanTaskState...")
 	c.muLock.Lock()
@@ -71,7 +97,37 @@ func (c *Coordinator) scanTaskState() {
 	allDone := true
 
 	for k, v := range c.taskStates {
+		switch v.Status {
+		case TaskStatus_New:
+			allDone = false
+			c.taskStates[k].Status = TaskStatus_Ready
+			c.taskChan <- c.NewOneTask(k)
+		case TaskStatus_Ready:
+			allDone = false
+		case TaskStatus_Running:
+			allDone = false
+			if time.Since(v.StartTime) > 10*time.Second {
+				c.taskStates[k].Status = TaskStatus_Ready
+				c.taskChan <- c.NewOneTask(k)
+			}
+		case TaskStatus_Terminated:
+		case TaskStatus_Error:
+			allDone = false
+			c.taskStates[k].Status = TaskStatus_Ready
+			c.taskChan <- c.NewOneTask(k)
+		default:
+			panic("unknown task status")
+	}
 
+	if allDone {
+		if c.taskPhase == TaskPhase_Map {
+			Dprintf("Map phase done and init Reduce phase")
+			c.taskPhase = TaskPhase_Reduce
+			c.taskStates = make([]TaskState, c.nReduce)
+		}else{
+			Dprintf("Reduce phase done")
+			c.done = true
+		}
 	}
 
 }
@@ -102,11 +158,9 @@ func (c *Coordinator) server() {
 // main/mrcoordinator.go calls Done() periodically to find out
 // if the entire job has finished.
 func (c *Coordinator) Done() bool {
-	ret := false
-
-	// Your code here.
-
-	return ret
+	c.muLock.Lock()
+	defer c.muLock.Unlock()
+	return c.done
 }
 
 // create a Coordinator.
