@@ -38,16 +38,27 @@ func Worker(mapf func(string, string) []KeyValue,
 	}
 
 	worker.register()
-
+	worker.run()
 	// uncomment to send the Example RPC to the coordinator.
 	// CallExample()
 
 }
 
+func (w *worker) run() {
+	Dprintf("run")
+	for {
+		//todo to add the task
+		task, err := w.getTask()
+	}
+}
+
 func (w *worker) register() {
 	args := RegisterArgs{}
 	reply := RegisterReply{}
-
+	// just return the workerId
+	// type RegisterReply struct {
+	// 	WorkerId int
+	// }
 	ok := call("Coordinator.RegWorker", &args, &reply)
 	if ok {
 		w.workerId = reply.WorkerId
@@ -56,7 +67,6 @@ func (w *worker) register() {
 		fmt.Println("register failed!")
 	}
 }
-
 
 // send an RPC request to the coordinator, wait for the response.
 // usually returns true.
