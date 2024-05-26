@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -60,6 +61,23 @@ func (c *Coordinator) schedule() {
 			c.scanTaskState()
 			time.Sleep(1 * time.Second)
 		}
+	}
+}
+
+//RPC request
+func (c *Coordinator) GetOneTask(args *TaskArgs,reply *TaskReply) error{
+	task := <-c.taskChan
+	reply.Task = &task
+
+	if task.Alive{
+		c.muLock.Lock()
+		if task.Phase != c.taskPhase{
+			return errors.New("Get wrong task phase")
+		}
+		c.taskStates[task.Seq].WorkerId = args.WorkerId
+		c.taskStates[task.Seq].Status = TaskStatus_Running
+		c.taskStates[task.Seq].StartTime = time.Now()
+		c.muLock.Unlock()
 	}
 }
 

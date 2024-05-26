@@ -24,6 +24,14 @@ type ExampleReply struct {
 	Y int
 }
 
+type TaskArgs struct {
+	WorkerId int
+}
+
+type TaskReply struct {
+	Task *Task
+}
+
 type RegisterArgs struct {
 }
 

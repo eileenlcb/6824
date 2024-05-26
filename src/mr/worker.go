@@ -1,10 +1,12 @@
 package mr
 
 import (
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log"
 	"net/rpc"
+	"os"
 )
 
 // Map functions return a slice of KeyValue.
@@ -47,9 +49,70 @@ func Worker(mapf func(string, string) []KeyValue,
 func (w *worker) run() {
 	Dprintf("run")
 	for {
-		//todo to add the task
 		task, err := w.getTask()
+		if err != nil {
+			Dprintf("get task failed")
+			continue
+		}
+		if !task.Alive {
+			Dprintf("task is not alive,exit")
+			return
+		}
+		w.doTask(*task)
 	}
+}
+
+func (w *worker) doTask(task Task) {
+	switch task.Phase {
+	case TaskPhase_Map:
+		w.doMapTask(task)
+	case TaskPhase_Reduce:
+		w.doReduceTask(task)
+	default:
+		panic(fmt.Sprintf("unknown task phase:%v", task.Phase))
+	}
+
+}
+
+// map任务时获取要输出的文件名
+func (w *worker) getReduceName(mapId, partitionId int) string {
+	return fmt.Sprintf("mr-kv-%d-%d", mapId, partitionId)
+}
+
+// reduce任务时获取要输出的文件名
+func (w *worker) getMergeName(partitionId int) string {
+	return fmt.Sprintf("mr-out-%d", partitionId)
+}
+
+func (w *worker) doMapTask(task Task) {
+	Dprintf("do map task %v", task)
+	cont, err := os.ReadFile(task.FileName)
+	if err != nil {
+		Dprintf("read file failed:%v", err)
+		return
+	}
+
+	kvs := w.mapF(task.FileName, string(cont))
+	partions := make([][]KeyValue, task.NReduce)
+	for _, kv := range kvs {
+		pid := ihash(kv.Key) % task.NReduce
+		partions[pid] = append(partions[pid], kv)
+	}
+
+	for k, v := range partions {
+		fileName := w.getReduceName(task.Seq, k)
+	}
+}
+
+func (w *worker) getTask() (*Task, error) {
+	args := TaskArgs{WorkerId: w.workerId}
+	reply := TaskReply{}
+
+	if err := call("Coordinator.GetOneTask", &args, &reply); !err {
+		return nil, errors.New("get task failed")
+	}
+	Dprintf("get task %v", reply.Task)
+	return reply.Task, nil
 }
 
 func (w *worker) register() {
