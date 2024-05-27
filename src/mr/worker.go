@@ -100,6 +100,7 @@ func (w *worker) doMapTask(task Task) {
 	}
 
 	for k, v := range partions {
+		//to get the file name
 		fileName := w.getReduceName(task.Seq, k)
 	}
 }
