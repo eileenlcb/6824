@@ -109,11 +109,11 @@ func (w *worker) doMapTask(task Task) {
 			w.reportTask(task, false)
 			return
 		}
-
+		//json encoder simply writes the json representation of the value to the stream
 		encoder := json.NewEncoder(file)
 		for _, kv := range v {
-			encoder.Encode(&kv);err!=nil{
-				Dprintf("encode kv fail in doMapTask. %v", err)
+			if err := encoder.Encode(&kv); err != nil {
+				Dprintf("encode  kvs to file-%v  fail in doMapTask. %v", fileName, err)
 				w.reportTask(task, false)
 			}
 		}
@@ -122,6 +122,45 @@ func (w *worker) doMapTask(task Task) {
 			w.reportTask(task, false)
 		}
 	}
+	w.reportTask(task, true)
+}
+
+func (w *worker) doReduceTask(task Task) {
+	maps := make(map[string][]string)
+
+	for i := 0; i < task.NMap; i++ {
+		fileName := w.getReduceName(i, task.Seq)
+		file, err := os.Open(fileName)
+		if err != nil {
+			Dprintf("open file-%v fail in doReduceTask. %v", fileName, err)
+			w.reportTask(task, false)
+			return
+		}
+		decoder := json.NewDecoder(file)
+		for {
+			var kv KeyValue
+			if err := decoder.Decode(&kv); err != nil {
+				break
+			}
+			if _, ok := maps[kv.Key]; !ok {
+				maps[kv.Key] = make([]string, 0)
+			}
+			maps[kv.Key] = append(maps[kv.Key], kv.Value)
+		}
+	}
+
+	res := make([]string, 0)
+	for k, v := range maps {
+		len := w.reduceF(k, v)
+		res = append(res, fmt.Sprintf("%v %v\n", k, len))
+	}
+
+	fileName := w.getMergeName(task.Seq)
+	if err := os.WriteFile(fileName, []byte(fmt.Sprintf("%v", res)), 0666); err != nil {
+		Dprintf("write file-%v fail in doReduceTask. %v", fileName, err)
+		w.reportTask(task, false)
+	}
+
 	w.reportTask(task, true)
 }
 
