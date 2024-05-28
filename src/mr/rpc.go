@@ -39,6 +39,16 @@ type RegisterReply struct {
 	WorkerId int
 }
 
+type reportTaskArgs struct {
+	WorkId int
+	Phase  TaskPhase
+	Seq    int
+	Done   bool
+}
+
+type reportTaskReply struct {
+}
+
 // Add your RPC definitions here.
 
 // Cook up a unique-ish UNIX-domain socket name

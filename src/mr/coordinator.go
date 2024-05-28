@@ -10,6 +10,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"golang.org/x/tools/go/analysis/passes/defers"
 )
 
 type TaskPhase int
@@ -157,6 +159,25 @@ func (c *Coordinator) RegWorker(args *RegisterArgs, reply *RegisterReply) error 
 	c.workerSeq++
 	reply.WorkerId = c.workerSeq
 	return nil
+}
+
+
+func (c *Coordinator) ReportTask(args *reportTaskArgs, reply *reportTaskReply) error {
+	c.muLock.Lock()
+	defers c.muLock.Unlock()
+
+	DPrintf("get report task: %+v, taskPhase: %+v", args, c.taskPhase)
+
+	if c.taskPhase != args.Phase || c.taskStates[args.Seq].WorkerId != args.WorkId {
+		DPrintf("in report task,workerId=%v report a useless task=%v", args.WorkerId, args.Seq)
+		return nil
+	}
+
+	if args.Done {
+		c.taskStates[args.Seq].Status = TaskStatus_Terminated
+	} else {
+		c.taskStates[args.Seq].Status = TaskStatus_Error
+	}
 }
 
 // start a thread that listens for RPCs from worker.go

@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -102,7 +103,26 @@ func (w *worker) doMapTask(task Task) {
 	for k, v := range partions {
 		//to get the file name
 		fileName := w.getReduceName(task.Seq, k)
+		file, err := os.Create(fileName)
+		if err != nil {
+			Dprintf("create file-%v fail in doMapTask. %v", fileName, err)
+			w.reportTask(task, false)
+			return
+		}
+
+		encoder := json.NewEncoder(file)
+		for _, kv := range v {
+			encoder.Encode(&kv);err!=nil{
+				Dprintf("encode kv fail in doMapTask. %v", err)
+				w.reportTask(task, false)
+			}
+		}
+		if err := file.Close(); err != nil {
+			Dprintf("close file fail in doMapTask. %v", err)
+			w.reportTask(task, false)
+		}
 	}
+	w.reportTask(task, true)
 }
 
 func (w *worker) getTask() (*Task, error) {
@@ -114,6 +134,19 @@ func (w *worker) getTask() (*Task, error) {
 	}
 	Dprintf("get task %v", reply.Task)
 	return reply.Task, nil
+}
+
+func (w *worker) reportTask(task Task, done bool) {
+	args := reportTaskArgs{
+		WorkId: w.workerId,
+		Phase:  task.Phase,
+		Seq:    task.Seq,
+		Done:   done,
+	}
+	reply := reportTaskReply{}
+	if ok := call("Coordinator.ReportTask", &args, &reply); !ok {
+		Dprintf("report task failed")
+	}
 }
 
 func (w *worker) register() {
