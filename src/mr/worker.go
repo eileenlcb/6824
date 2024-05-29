@@ -164,6 +164,8 @@ func (w *worker) doReduceTask(task Task) {
 	w.reportTask(task, true)
 }
 
+//todo add more test
+
 func (w *worker) getTask() (*Task, error) {
 	args := TaskArgs{WorkerId: w.workerId}
 	reply := TaskReply{}
