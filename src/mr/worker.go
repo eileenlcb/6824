@@ -189,10 +189,8 @@ func (w *worker) reportTask(task Task, done bool) {
 func (w *worker) register() {
 	args := RegisterArgs{}
 	reply := RegisterReply{}
-	// just return the workerId
-	// type RegisterReply struct {
-	// 	WorkerId int
-	// }
+
+	
 	ok := call("Coordinator.RegWorker", &args, &reply)
 	if ok {
 		w.workerId = reply.WorkerId
