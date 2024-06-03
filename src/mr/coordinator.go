@@ -10,8 +10,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"golang.org/x/tools/go/analysis/passes/defers"
 )
 
 type TaskPhase int
@@ -32,11 +30,11 @@ const (
 
 type Task struct {
 	FileName string
-	Phase TaskPhase
-	Seq int
-	NMap int
-	NReduce int
-	Alive bool
+	Phase    TaskPhase
+	Seq      int
+	NMap     int
+	NReduce  int
+	Alive    bool
 }
 
 type TaskState struct {
@@ -66,14 +64,14 @@ func (c *Coordinator) schedule() {
 	}
 }
 
-//RPC request
-func (c *Coordinator) GetOneTask(args *TaskArgs,reply *TaskReply) error{
+// RPC request
+func (c *Coordinator) GetOneTask(args *TaskArgs, reply *TaskReply) error {
 	task := <-c.taskChan
 	reply.Task = &task
 
-	if task.Alive{
+	if task.Alive {
 		c.muLock.Lock()
-		if task.Phase != c.taskPhase{
+		if task.Phase != c.taskPhase {
 			return errors.New("Get wrong task phase")
 		}
 		c.taskStates[task.Seq].WorkerId = args.WorkerId
@@ -81,20 +79,21 @@ func (c *Coordinator) GetOneTask(args *TaskArgs,reply *TaskReply) error{
 		c.taskStates[task.Seq].StartTime = time.Now()
 		c.muLock.Unlock()
 	}
+	Dprintf("in get one Task, args:%+v, reply:%+v", args, reply)
+	return nil
 }
 
-
-func (c *Coordinator) NewOneTask(seq int) Task{
+func (c *Coordinator) NewOneTask(seq int) Task {
 	task := Task{
 		FileName: "",
-		Phase: c.taskPhase,
-		NMap: len(c.files),
-		NReduce: c.nReduce,
-		Seq: seq,
-		Alive: true,
+		Phase:    c.taskPhase,
+		NMap:     len(c.files),
+		NReduce:  c.nReduce,
+		Seq:      seq,
+		Alive:    true,
 	}
 
-	DPrintf("m:%+v, taskseq:%d, lenfiles:%d, lents:%d", c, seq, len(c.files), len(c.taskStates))
+	Dprintf("m:%+v, taskseq:%d, lenfiles:%d, lents:%d", c, seq, len(c.files), len(c.taskStates))
 
 	if task.Phase == TaskPhase_Map {
 		task.FileName = c.files[seq]
@@ -103,7 +102,6 @@ func (c *Coordinator) NewOneTask(seq int) Task{
 	return task
 
 }
-
 
 func (c *Coordinator) scanTaskState() {
 	Dprintf("scanTaskState...")
@@ -137,19 +135,19 @@ func (c *Coordinator) scanTaskState() {
 			c.taskChan <- c.NewOneTask(k)
 		default:
 			panic("unknown task status")
-	}
+		}
 
-	if allDone {
-		if c.taskPhase == TaskPhase_Map {
-			Dprintf("Map phase done and init Reduce phase")
-			c.taskPhase = TaskPhase_Reduce
-			c.taskStates = make([]TaskState, c.nReduce)
-		}else{
-			Dprintf("Reduce phase done")
-			c.done = true
+		if allDone {
+			if c.taskPhase == TaskPhase_Map {
+				Dprintf("Map phase done and init Reduce phase")
+				c.taskPhase = TaskPhase_Reduce
+				c.taskStates = make([]TaskState, c.nReduce)
+			} else {
+				Dprintf("Reduce phase done")
+				c.done = true
+			}
 		}
 	}
-
 }
 
 func (c *Coordinator) RegWorker(args *RegisterArgs, reply *RegisterReply) error {
@@ -161,15 +159,15 @@ func (c *Coordinator) RegWorker(args *RegisterArgs, reply *RegisterReply) error 
 	return nil
 }
 
-
 func (c *Coordinator) ReportTask(args *reportTaskArgs, reply *reportTaskReply) error {
-	c.muLock.Lock()
-	defers c.muLock.Unlock()
 
-	DPrintf("get report task: %+v, taskPhase: %+v", args, c.taskPhase)
+	c.muLock.Lock()
+	defer c.muLock.Unlock()
+	fmt.Println("Report task")
+	Dprintf("get report task: %+v, taskPhase: %+v", args, c.taskPhase)
 
 	if c.taskPhase != args.Phase || c.taskStates[args.Seq].WorkerId != args.WorkId {
-		DPrintf("in report task,workerId=%v report a useless task=%v", args.WorkerId, args.Seq)
+		Dprintf("in report task,workerId=%v report a useless task=%v", args.WorkId, args.Seq)
 		return nil
 	}
 
@@ -178,6 +176,9 @@ func (c *Coordinator) ReportTask(args *reportTaskArgs, reply *reportTaskReply) e
 	} else {
 		c.taskStates[args.Seq].Status = TaskStatus_Error
 	}
+
+	go c.scanTaskState()
+	return nil
 }
 
 // start a thread that listens for RPCs from worker.go
